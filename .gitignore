@@ -1,0 +1,52 @@
+# Python cache/build products
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+build/
+dist/
+*.egg-info/
+
+# Notebook/editor scratch
+.ipynb_checkpoints/
+.Rhistory
+.RData
+.Rproj.user/
+~$*.xlsx
+*.tmp
+
+# Local environments and secrets
+.env
+.env.*
+.venv/
+venv/
+env/
+
+# Generated experiment outputs
+exp_data/
+data/raw/
+data/processed/
+pca_nonstationary_plots/
+metrics_comparison.png
+*_data.npz
+*_rmse_curves.png
+*_Z_added_points.png
+total_res_*.pkl
+corrected_total_res_finalversion.pkl
+*.h5
+*.hdf5
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+
+# Experiment result artifacts (logs, CSV/JSON outputs, plots, result subdirs)
+*.log
+results/
+experiments/**/*.csv
+experiments/**/*.json
+experiments/**/*.png
+experiments/**/*.npz
+experiments/**/*.pkl

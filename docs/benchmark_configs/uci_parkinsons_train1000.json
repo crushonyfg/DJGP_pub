@@ -1,0 +1,11 @@
+{
+  "selected_params": {
+    "members": [
+      1,
+      2
+    ],
+    "step": 200,
+    "beta_kl_R": 0.02,
+    "w_signal_var": 1.0
+  }
+}

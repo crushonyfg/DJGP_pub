@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "djgp-research"
+version = "0.1.0"
+description = "Deep Jump Gaussian Process research code (DJGP / LMJGP)"
+requires-python = ">=3.10"
+readme = "README.md"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["djgp*", "jumpgp*", "JumpGaussianProcess*", "shared*", "data_gen*"]

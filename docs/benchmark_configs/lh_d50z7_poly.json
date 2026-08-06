@@ -1,0 +1,11 @@
+{
+  "selected_params": {
+    "steps": 200,
+    "n_neighbors": 35,
+    "q": 5,
+    "topk": 4,
+    "combiner": "robust",
+    "w_signal_var": 0.2,
+    "beta_kl_R": 0.02
+  }
+}
