@@ -34,15 +34,12 @@ array of locations in the original X space.
 """
 from __future__ import annotations
 
-import json
 import math
 import time
-from pathlib import Path
 
 import numpy as np
 import torch
 
-from djgp.projections.global_residual_selfcem import _neighbor_stack
 from djgp.projections.lowrank_factorization import compute_pls_W0
 from djgp.projections.structured_metric_lmjgp import (
     AnalyticStructuredMetricLMJGPConfig,
@@ -71,6 +68,19 @@ DEFAULT_TUNE_GRIDS = {
 UPDATE_MODES = ("freeze_w", "finetune_w", "retrain")
 
 
+def _neighbor_stack(X_query, X_train, y_train, *, n_neighbors):
+    """Return deterministic Euclidean k-nearest-neighbour stacks."""
+    with torch.no_grad():
+        distances = torch.cdist(X_query, X_train)
+        indices = torch.topk(
+            distances,
+            k=min(int(n_neighbors), X_train.shape[0]),
+            largest=False,
+            dim=1,
+        ).indices
+    return X_train[indices].contiguous(), y_train[indices].contiguous(), indices.contiguous()
+
+
 def _gauss_crps(y, mu, sigma):
     sigma = np.maximum(np.asarray(sigma, np.float64), 1e-12)
     z = (np.asarray(y, np.float64) - np.asarray(mu, np.float64)) / sigma
@@ -79,18 +89,23 @@ def _gauss_crps(y, mu, sigma):
 
 
 def _sir_W0(X, y, q, n_slices=10):
-    """Compact sliced-inverse-regression directions (rows normalized)."""
-    Xs = (X - X.mean(0)) / np.maximum(X.std(0), 1e-8)
-    order = np.argsort(y)
-    slices = np.array_split(order, n_slices)
-    M = np.zeros((X.shape[1], X.shape[1]))
-    for sl in slices:
-        if len(sl) == 0:
-            continue
-        m = Xs[sl].mean(0)
-        M += (len(sl) / len(y)) * np.outer(m, m)
-    _, vecs = np.linalg.eigh(M)
-    W = vecs[:, ::-1][:, :q].T
+    """Deterministic sliced-inverse-regression directions (rows normalized)."""
+    X = np.asarray(X, np.float64)
+    y = np.asarray(y, np.float64).ravel()
+    n, p = X.shape
+    covariance = np.cov(X, rowvar=False)
+    eigenvalues, eigenvectors = np.linalg.eigh(covariance)
+    eigenvalues = np.maximum(eigenvalues, 1e-10)
+    inv_half = (eigenvectors * (1.0 / np.sqrt(eigenvalues))) @ eigenvectors.T
+    whitened = (X - X.mean(0)) @ inv_half
+    whitened = whitened[np.argsort(y, kind="stable")]
+    between = np.zeros((p, p), dtype=np.float64)
+    for sl in np.array_split(np.arange(n), int(n_slices)):
+        if sl.size:
+            mean = whitened[sl].mean(0)
+            between += (sl.size / n) * np.outer(mean, mean)
+    _, directions = np.linalg.eigh(between)
+    W = np.real(inv_half @ directions[:, ::-1][:, : int(q)]).T
     return W / (np.linalg.norm(W, axis=1, keepdims=True) + 1e-8)
 
 
@@ -114,6 +129,9 @@ class DJGP:
     noise_mode : "data_driven" (default) or "fixed"
     uniform_outlier : outlier head -- True (default) = flat uniform density 1/u_j,
         False = broad-Gaussian outlier
+    init_methods : ordered projection initializations selected from
+        ``("pls", "pca", "sir", "random")``. Set ``("sir",)`` with
+        ``K_members=1`` for a single deterministic SIR-initialized member.
     m_inducing : LOCAL inducing points per anchor (default 10)
     n_inducing_R : GLOBAL W-field inducing -- int, "auto" (default), or an
         [M, D] array of custom locations (original X scale)
@@ -127,7 +145,8 @@ class DJGP:
                  K_members=8, topk=4, combiner="robust", noise_mode="data_driven",
                  m_inducing=10, n_inducing_R="auto", standardize_x=True,
                  standardize_y=True, n_val=150, lr=0.01, seed=0, device=None,
-                 uniform_outlier=True, verbose=False):
+                 uniform_outlier=True, init_methods=("pls", "pca", "sir"),
+                 verbose=False):
         self.q = int(q)
         self.n_neighbors = int(n_neighbors)
         self.steps = int(steps)
@@ -146,6 +165,12 @@ class DJGP:
         self.n_val = int(n_val)
         self.lr = float(lr)
         self.uniform_outlier = bool(uniform_outlier)
+        self.init_methods = tuple(str(method) for method in init_methods)
+        if not self.init_methods:
+            raise ValueError("init_methods must contain at least one initialization")
+        unknown_inits = set(self.init_methods) - {"pls", "pca", "sir", "random"}
+        if unknown_inits:
+            raise ValueError(f"unknown initialization methods: {sorted(unknown_inits)}")
         self.seed = int(seed)
         self.device = torch.device(device) if device is not None else torch.device(
             "cuda" if torch.cuda.is_available() else "cpu")
@@ -343,17 +368,6 @@ class DJGP:
                 "holdout_" + metric: table[(tk, cb)],
                 "note": "single holdout split (not CV); score is in-dataset"}
 
-    # ----------------------------------------------------------- classmethod
-    @classmethod
-    def from_benchmark_json(cls, path, **overrides):
-        """Build an instance from a frozen docs/benchmark_configs/*.json (synthetic style)."""
-        sel = json.loads(Path(path).read_text())["selected_params"]
-        kw = dict(q=sel["q"], n_neighbors=sel["n_neighbors"], steps=sel["steps"],
-                  beta_kl_R=sel["beta_kl_R"], w_signal_var=sel["w_signal_var"],
-                  topk=sel["topk"], combiner=sel["combiner"])
-        kw.update(overrides)
-        return cls(**kw)
-
     # ------------------------------------------------------------- internals
     def _std_x(self, X):
         return torch.as_tensor((np.asarray(X, np.float64) - self._x_mean) / self._x_std,
@@ -361,19 +375,24 @@ class DJGP:
 
     def _make_inits(self, Xs, ys):
         inits, rng_id = [], 0
-        try:
-            inits.append(compute_pls_W0(Xs, ys, Q=self.q).astype(np.float64))
-        except Exception:  # noqa: BLE001
-            pass
-        try:
-            from sklearn.decomposition import PCA
-            inits.append(PCA(n_components=self.q).fit(Xs).components_.astype(np.float64))
-        except Exception:  # noqa: BLE001
-            pass
-        try:
-            inits.append(_sir_W0(Xs, ys, self.q))
-        except Exception:  # noqa: BLE001
-            pass
+        for method in self.init_methods:
+            try:
+                if method == "pls":
+                    W = compute_pls_W0(Xs, ys, Q=self.q).astype(np.float64)
+                elif method == "pca":
+                    from sklearn.decomposition import PCA
+                    W = PCA(n_components=self.q).fit(Xs).components_.astype(np.float64)
+                elif method == "sir":
+                    W = _sir_W0(Xs, ys, self.q)
+                elif method == "random":
+                    rr = np.random.RandomState(20260000 + self.seed + rng_id)
+                    W = rr.randn(self.q, Xs.shape[1]).astype(np.float64)
+                    W /= np.linalg.norm(W, axis=1, keepdims=True) + 1e-8
+                    rng_id += 1
+                inits.append(W)
+            except (np.linalg.LinAlgError, RuntimeError, ValueError):
+                if len(self.init_methods) == 1:
+                    raise
         while len(inits) < self.K_members:
             rr = np.random.RandomState(20260000 + self.seed + rng_id)
             W = rr.randn(self.q, Xs.shape[1]).astype(np.float64)
