@@ -16,7 +16,7 @@ intentionally not included.
 
 ## L2 phantom reference
 
-![L2 phantom reference](figures/l2_phantom.png)
+![L2 phantom reference](src/JumpGaussianProcess/bound3.png)
 
 ## Environment
 
