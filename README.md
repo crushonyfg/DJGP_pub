@@ -8,10 +8,15 @@ This release contains only:
 - the user-facing `djgp.model.DJGP` interface and its required implementation;
 - the JumpGP, JGP-PCA, JGP-SIR, NGBoost, and BART baselines required by the paper table;
 - one deterministic Parkinsons reproduction (`train=1000`, `test=200`, seeds 0–2);
-- the exact subject-disjoint splits used by that reproduction.
+- the exact subject-disjoint splits used by that reproduction;
+- the L2 phantom reference image used in the synthetic study.
 
 The old synthetic/UCI experiment harnesses and frozen benchmark-configuration files are
 intentionally not included.
+
+## L2 phantom reference
+
+![L2 phantom reference](src/JumpGaussianProcess/bound3.png)
 
 ## Environment
 
