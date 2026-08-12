@@ -5,10 +5,16 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "djgp-research"
 version = "0.1.0"
-description = "Deep Jump Gaussian Process research code (DJGP / LMJGP)"
-requires-python = ">=3.10"
+description = "Minimal reproducible Deep Jump Gaussian Process implementation"
+requires-python = ">=3.11,<3.12"
 readme = "README.md"
+dependencies = [
+    "torch==2.13.0",
+    "numpy==2.4.6",
+    "scipy==1.17.1",
+    "scikit-learn==1.9.0",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["djgp*", "jumpgp*", "JumpGaussianProcess*", "shared*", "data_gen*"]
+include = ["djgp*", "jumpgp*", "JumpGaussianProcess*"]

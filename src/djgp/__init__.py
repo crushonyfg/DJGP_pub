@@ -1,14 +1,5 @@
-"""Package entry points for the DJGP implementation.
+"""Public package entry point for Deep Jump Gaussian Process."""
 
-The repository is being migrated from flat scripts to packages. Submodules in
-this package currently wrap the legacy modules so old entrypoints keep working.
-"""
+from djgp.model import DJGP
 
-__all__ = [
-    "active_learning",
-    "acquisition_metrics",
-    "jumpgp_bridge",
-    "minibatch",
-    "sir",
-    "variational",
-]
+__all__ = ["DJGP"]

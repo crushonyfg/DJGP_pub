@@ -1,149 +1,80 @@
 # Deep Jump Gaussian Process (DJGP)
 
-Reference implementation for *"Deep Jump Gaussian Processes for Surrogate Modeling of
-High-Dimensional Piecewise Continuous Functions."*
+Minimal reference implementation for *Deep Jump Gaussian Processes for Surrogate
+Modeling of High-Dimensional Piecewise Continuous Functions*.
 
-DJGP is a surrogate model for piecewise continuous functions on high-dimensional domains.
-For each test location it selects a small neighbourhood of training points, maps them to a
-low-dimensional space through a **region-specific locally linear projection** (a Gaussian
-process prior lets these projections vary smoothly across the input space), and fits a
-local **Jump Gaussian Process** in the projected space to capture the discontinuities. The
-projection matrices and the local Jump-GP hyperparameters are learned jointly by
-variational inference. Prediction is transductive — the local models are trained around the
-test locations.
+This release contains only:
 
----
+- the user-facing `djgp.model.DJGP` interface and its required implementation;
+- the JumpGP, JGP-PCA, JGP-SIR, NGBoost, and BART baselines required by the paper table;
+- one deterministic Parkinsons reproduction (`train=1000`, `test=200`, seeds 0–2);
+- the exact subject-disjoint splits used by that reproduction.
 
-## Setup
+The old synthetic/UCI experiment harnesses and frozen benchmark-configuration files are
+intentionally not included.
 
-```bash
-python -m venv .venv && source .venv/bin/activate     # or conda
-pip install -r requirements.txt
-pip install -e .             # makes src/* importable as top-level packages
-```
+## Environment
 
----
-
-## Reproducing benchmark results
-
-### Synthetic datasets (L2, LH)
-
-The synthetic data follow the two-stage construction in the paper: a low-dimensional latent
-family (**L2**, latent dimension K=2, and **LH**, latent dimension K=4/5/7) with a piecewise
-continuous response, lifted to an observed dimension D by one of five dimensionality-expansion
-techniques (`rff, poly, ae, randproj, manifold`). This gives 20 settings; each is generated
-on the fly (train=1000 / test=200, seeded).
-
-Baselines: Jump GP (`jgp`), Jump GP after PCA (`jgp_pca`) or sliced inverse regression
-(`jgp_sir`), Deep GP (`dgp`), NGBoost (`ngboost`), and BART (`bart`). DJGP hyperparameters
-are loaded from the frozen configuration files in `docs/benchmark_configs/` — there is no
-tuning phase in this script.
+Python 3.11 is required. The reported reference run used Python 3.11.15 on CPU. Install
+the pinned environment from the repository root:
 
 ```bash
-# Quick check — one setting, seed 0
-python run_synthetic.py --settings l2_d20_rff --seeds 0
-
-# Full reproduction (all 20 settings, all methods, 25 seeds; long)
-python run_synthetic.py
-
-# Subsets
-python run_synthetic.py --settings lh_d30z5_rff,lh_d30z5_poly --methods djgp,jgp,ngboost
+python3.11 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+python -m pip install -e .
 ```
 
-Per-seed rows go to `results/synthetic/metrics.csv`, seed-aggregated means to
-`aggregate.csv` beside it (RMSE / CRPS / cov90).
+## Reproduce the Parkinsons table
 
-### UCI datasets (Wine Quality, Parkinsons, Appliances)
-
-Six configurations: Wine and Appliances at train=1000 and train=5000, Parkinsons at
-train=1000 and train=4000 (subject-grouped). The train/test splits are derived data and are
-not committed — generate them once (fetches the datasets via `ucimlrepo`):
+Run one command from the repository root:
 
 ```bash
-python scripts/prepare_uci_data.py            # both regimes, seeds 0..24
+python reproduce_parkinson.py
 ```
 
-Then run the benchmark (same methods as above; DJGP hyperparameters loaded from
-`docs/benchmark_configs/uci_*.json`):
+No dataset download, GPU, tuning, or arguments are needed. The script verifies the SHA-256
+checksums of the committed splits, forces deterministic single-threaded CPU execution, runs
+three seeds, and checks that the aggregate metrics match the reference values to two
+decimal places. The CSV files retain full numerical precision.
 
-```bash
-# Quick check
-python run_uci.py --datasets Wine --sizes 1000 --seeds 0
+Outputs:
 
-# Full reproduction (6 configs, all methods, 25 seeds; long)
-python run_uci.py
-```
+- `results/parkinson_results.csv`: aggregate mean and sample standard deviation;
+- `results/parkinson_results_per_seed.csv`: one row per seed and method.
 
-Results go to `results/uci/metrics.csv` with an aggregate table printed at the end
-(RMSE / CRPS / cov90).
+Expected aggregate table:
 
----
+| Method | RMSE | CRPS | Cov90 |
+|---|---:|---:|---:|
+| JGP | 10.62 ± 0.08 | 7.49 ± 0.35 | 0.35 ± 0.07 |
+| JGP-PCA | 9.96 ± 1.18 | 6.67 ± 1.19 | 0.43 ± 0.08 |
+| JGP-SIR | 9.35 ± 0.32 | 6.35 ± 0.55 | 0.43 ± 0.07 |
+| NGBoost | 9.69 ± 1.54 | 6.65 ± 1.21 | 0.44 ± 0.09 |
+| BART | 10.25 ± 0.78 | 7.06 ± 0.49 | 0.35 ± 0.02 |
+| **DJGP-SIR (single member)** | **7.53 ± 1.18** | **4.59 ± 0.54** | **0.95 ± 0.07** |
 
-## Using DJGP on your own data
+DGP is deliberately excluded. DJGP uses one SIR-initialized member—there is no ensemble.
 
-The user-facing class is `djgp.model.DJGP`, with the benchmark defaults built in. DJGP is
-**transductive**: the local models are trained around the test inputs, so the test inputs are
-part of fitting.
+## Use DJGP on another dataset
+
+DJGP is transductive: training occurs around the supplied test inputs.
 
 ```python
-import numpy as np
-from djgp.model import DJGP
+from djgp import DJGP
 
-# X_train: [N, D] float array   y_train: [N]   X_test: [T, D]
-model = DJGP()                           # defaults = the benchmark pipeline
-model.fit(X_train, y_train, X_test)      # trains around the test locations
-mu, std = model.predict()                # predictive mean / std, original y scale
-```
-
-**Post-training** — new training data and/or new test locations (both optional), three modes:
-
-```python
-# 1) keep the learned projections fixed; only the per-location local layers train (cheapest)
-mu, std = model.update(X_test_new=X_new, mode="freeze_w")
-# 2) warm-start the projections from the learned posterior and fine-tune everything
-mu, std = model.update(X_train_new=Xtr2, y_train_new=ytr2, X_test_new=X_new, mode="finetune_w")
-# 3) full retrain from scratch on the pooled old+new data
-mu, std = model.update(X_train_new=Xtr2, y_train_new=ytr2, X_test_new=X_new, mode="retrain")
-```
-
-**Optional single-dataset tuning** (a class method; one random holdout split of your
-training data — *not* cross-validation):
-
-```python
-model.tune(X_train, y_train)
+model = DJGP()
 model.fit(X_train, y_train, X_test)
-mu, std = model.predict()
+mean, standard_deviation = model.predict()
 ```
 
-All constructor options (defaults = the benchmark pipeline) are documented in the class
-docstring — see `help(djgp.model.DJGP)`. Frozen benchmark hyperparameters can be loaded
-directly: `DJGP.from_benchmark_json("docs/benchmark_configs/lh_d30z5_rff.json")`.
+To run a single SIR-initialized member:
 
----
-
-## Package layout
-
-```
-src/
-  djgp/               # DJGP model and projections
-    model.py          # public DJGP class (fit / predict / update / tune)
-    projections/      # core model implementation
-    baselines/        # NGBoost and global sparse-GP baselines
-    evaluation/       # CRPS, calibration metrics
-  jumpgp/             # Jump GP
-  shared/             # utilities, Deep GP, runners
-  data_gen/           # synthetic data generators
-experiments/          # benchmark harnesses used by the entry points below
-scripts/
-  prepare_uci_data.py # one-time UCI split generation
-run_synthetic.py      # benchmark entry point (synthetic)
-run_uci.py            # benchmark entry point (UCI)
+```python
+model = DJGP(K_members=1, topk=1, init_methods=("sir",))
+model.fit(X_train, y_train, X_test)
+mean, standard_deviation = model.predict()
 ```
 
----
-
-## Smoke tests
-
-```bash
-python -m pytest tests/ -q
-```
+Constructor options and the `fit`, `predict`, `update`, and `tune` methods are documented in
+`djgp.model.DJGP`.
