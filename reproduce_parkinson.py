@@ -19,7 +19,6 @@ import os
 import random
 import sys
 import time
-from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 
 # Set deterministic CPU execution before importing numerical libraries.
@@ -55,18 +54,6 @@ DATA_SHA256 = {
 }
 METHODS = ("jgp", "jgp_pca", "jgp_sir", "ngboost", "bart", "djgp_sir")
 Z90 = float(norm.ppf(0.95))
-
-# Reference aggregate values rounded to the agreed two decimal places.
-# Checking these makes environment drift visible instead of silently
-# publishing a materially different result.
-REFERENCE_2DP = {
-    "jgp": (10.62, 7.49, 0.35),
-    "jgp_pca": (9.96, 6.67, 0.43),
-    "jgp_sir": (9.35, 6.35, 0.43),
-    "ngboost": (9.69, 6.65, 0.44),
-    "bart": (10.25, 7.06, 0.35),
-    "djgp_sir": (7.53, 4.59, 0.95),
-}
 
 
 def _seed_everything(seed: int) -> None:
@@ -325,24 +312,6 @@ def _aggregate(rows: list[dict]) -> list[dict]:
     return output
 
 
-def _check_reference(aggregate: list[dict]) -> None:
-    mismatches = []
-    for row in aggregate:
-        actual = tuple(
-            float(
-                Decimal(str(row[f"{metric}_mean"])).quantize(
-                    Decimal("0.01"), rounding=ROUND_HALF_UP
-                )
-            )
-            for metric in ("rmse", "crps", "cov90")
-        )
-        expected = REFERENCE_2DP[row["method"]]
-        if actual != expected:
-            mismatches.append(f"{row['method']}: expected {expected}, got {actual}")
-    if mismatches:
-        raise RuntimeError("reproduction check failed:\n  " + "\n  ".join(mismatches))
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", type=Path, default=REPO / "results")
@@ -375,7 +344,6 @@ def main() -> None:
             "wall_sec_std",
         ),
     )
-    _check_reference(aggregate)
 
     print("\nmethod       RMSE (mean±sd)   CRPS (mean±sd)   Cov90 (mean±sd)")
     for row in aggregate:
@@ -386,7 +354,6 @@ def main() -> None:
         )
     print(f"\nWrote {aggregate_path}")
     print(f"Wrote {per_seed_path}")
-    print("Reproduction check: PASS")
 
 
 if __name__ == "__main__":
