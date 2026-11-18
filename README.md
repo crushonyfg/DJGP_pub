@@ -37,8 +37,9 @@ python reproduce_parkinson.py
 
 No dataset download, GPU, tuning, or arguments are needed. The script verifies the SHA-256
 checksums of the committed splits, forces deterministic single-threaded CPU execution, runs
-three seeds, and checks that the aggregate metrics match the reference values to two
-decimal places. The CSV files retain full numerical precision.
+three seeds, and prints the aggregate metrics. The CSV files retain full numerical
+precision. Small differences from the table below are expected when package versions or
+hardware differ from the pinned reference environment.
 
 Outputs:
 
