@@ -17,7 +17,7 @@ This release contains:
 
 ## Environment
 
-Python 3.11 is required. The reported reference run used Python 3.11.15 on CPU. Install
+Python 3.11 is required. The reported reference run used Python 3.11.18 on CPU. Install
 the pinned environment from the repository root:
 
 ```bash
@@ -50,14 +50,15 @@ Expected aggregate table:
 
 | Method | RMSE | CRPS | Cov90 |
 |---|---:|---:|---:|
-| JGP | 10.62 ± 0.08 | 7.49 ± 0.35 | 0.35 ± 0.07 |
-| JGP-PCA | 9.96 ± 1.18 | 6.67 ± 1.19 | 0.43 ± 0.08 |
-| JGP-SIR | 9.35 ± 0.32 | 6.35 ± 0.55 | 0.43 ± 0.07 |
-| NGBoost | 9.69 ± 1.54 | 6.65 ± 1.21 | 0.44 ± 0.09 |
+| JGP | 10.61 ± 0.08 | 7.47 ± 0.32 | 0.35 ± 0.07 |
+| JGP-PCA | 9.97 ± 1.16 | 6.68 ± 1.18 | 0.43 ± 0.08 |
+| JGP-SIR | 9.32 ± 0.29 | 6.32 ± 0.57 | 0.43 ± 0.07 |
+| NGBoost | 9.69 ± 1.54 | 6.65 ± 1.20 | 0.44 ± 0.09 |
 | BART | 10.25 ± 0.78 | 7.06 ± 0.49 | 0.35 ± 0.02 |
-| **DJGP-SIR (single member)** | **7.53 ± 1.18** | **4.59 ± 0.54** | **0.95 ± 0.07** |
+| **DJGP-SIR (single member)** | **7.57 ± 1.30** | **4.60 ± 0.62** | **0.94 ± 0.07** |
 
-DGP is deliberately excluded. DJGP uses one SIR-initialized member—there is no ensemble.
+DGP is deliberately excluded. DJGP uses one SIR-initialized member—there is no ensemble—and
+the default uniform outlier density (`uniform_outlier=True`).
 
 ## Use DJGP on another dataset
 

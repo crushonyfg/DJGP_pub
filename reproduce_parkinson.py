@@ -217,7 +217,7 @@ def _run_djgp_sir(data: dict) -> dict:
         lr=0.01,
         seed=0,
         device="cpu",
-        uniform_outlier=False,
+        uniform_outlier=True,
         init_methods=("sir",),
     )
     # The committed split already contains train-only standardized X and y.
