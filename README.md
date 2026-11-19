@@ -57,8 +57,7 @@ Expected aggregate table:
 | BART | 10.25 ± 0.78 | 7.06 ± 0.49 | 0.35 ± 0.02 |
 | **DJGP-SIR (single member)** | **7.57 ± 1.30** | **4.60 ± 0.62** | **0.94 ± 0.07** |
 
-DGP is deliberately excluded. DJGP uses one SIR-initialized member—there is no ensemble—and
-the default uniform outlier density (`uniform_outlier=True`).
+DGP is deliberately excluded. DJGP uses one SIR-initialized member—there is no ensemble.
 
 ## Use DJGP on another dataset
 
